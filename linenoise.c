@@ -106,6 +106,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -172,6 +173,10 @@ enum KEY_ACTION{
 static void linenoiseAtExit(void);
 int linenoiseHistoryAdd(const char *line);
 static void refreshLine(struct linenoiseState *l);
+
+static bool is_utf8char( char s );
+static bool is_utf8head( char s );
+static int utf8len( const char *str );
 
 /* Debugging macro. */
 #if 0
@@ -411,6 +416,7 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
  * in order to add completion options given the input string when the
  * user typed <tab>. See the example.c source code for a very easy to
  * understand example. */
+
 void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
     size_t len = strlen(str);
     char *copy, **cvec;
@@ -462,7 +468,7 @@ static void abFree(struct abuf *ab) {
  * cursor position, and number of columns of the terminal. */
 static void refreshSingleLine(struct linenoiseState *l) {
     char seq[64];
-    size_t plen = strlen(l->prompt);
+    size_t plen = utf8len(l->prompt);
     int fd = l->ofd;
     char *buf = l->buf;
     size_t len = l->len;
@@ -489,7 +495,8 @@ static void refreshSingleLine(struct linenoiseState *l) {
     snprintf(seq,64,"\x1b[0K");
     abAppend(&ab,seq,strlen(seq));
     /* Move cursor to original position. */
-    snprintf(seq,64,"\r\x1b[%dC", (int)(pos+plen));
+    snprintf(seq,64,"\r\x1b[%dC",
+            (int)(utf8len(buf) - utf8len(buf+pos) + plen));
     abAppend(&ab,seq,strlen(seq));
     if (write(fd,ab.b,ab.len) == -1) {} /* Can't recover from write error. */
     abFree(&ab);
@@ -619,8 +626,13 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 
 /* Move cursor on the left. */
 void linenoiseEditMoveLeft(struct linenoiseState *l) {
-    if (l->pos > 0) {
-        l->pos--;
+    if (l->pos > 0){
+        do {
+            l->pos--;
+        } while (l->pos != 0 &&
+                is_utf8char(l->buf[l->pos]) &&
+                !is_utf8head( l->buf[l->pos]));
+
         refreshLine(l);
     }
 }
@@ -628,7 +640,12 @@ void linenoiseEditMoveLeft(struct linenoiseState *l) {
 /* Move cursor on the right. */
 void linenoiseEditMoveRight(struct linenoiseState *l) {
     if (l->pos != l->len) {
-        l->pos++;
+        do {
+            l->pos++;
+        } while (l->pos != l->len &&
+                is_utf8char(l->buf[l->pos]) &&
+                !is_utf8head( l->buf[l->pos]));
+
         refreshLine(l);
     }
 }
@@ -1102,4 +1119,34 @@ int linenoiseHistoryLoad(const char *filename) {
     }
     fclose(fp);
     return 0;
+}
+
+/* Routines for ut8 variable-length character handling */
+
+/* Returns true if "s" is part of a utf8 character */
+static bool is_utf8char(char s) {
+    return (s & 0x80) == 0x80;
+}
+
+/* Returns true if "s" is a utf8 header byte */
+static bool is_utf8head(char s) {
+    return (s & 0xc0) == 0xc0;
+}
+
+/* Returns the number of characters (including variable-length) in "str"
+ *
+ * Don't use this for determining the amount of memory the string uses,
+ * strlen() is the routine you're looking for. */
+static int utf8len(const char *str) {
+    int ret = 0;
+    unsigned i;
+
+    for ( i = 0; str[i]; i++ ){
+		// only count either the starting utf8 header, or ascii characters
+        if ( is_utf8head( str[i] ) || !is_utf8char( str[i] )){
+            ret++;
+        }
+    }
+
+    return ret;
 }
