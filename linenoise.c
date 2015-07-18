@@ -1,5 +1,7 @@
-/* linenoise.c -- guerrilla line editing library against the idea that a
- * line editing lib needs to be 20,000 lines of C code.
+/* linenoise.c -- VERSION 1.0
+ *
+ * Guerrilla line editing library against the idea that a line editing lib
+ * needs to be 20,000 lines of C code.
  *
  * You can find the latest source code at:
  *
@@ -10,7 +12,7 @@
  *
  * ------------------------------------------------------------------------
  *
- * Copyright (c) 2010-2013, Salvatore Sanfilippo <antirez at gmail dot com>
+ * Copyright (c) 2010-2014, Salvatore Sanfilippo <antirez at gmail dot com>
  * Copyright (c) 2010-2013, Pieter Noordhuis <pcnoordhuis at gmail dot com>
  *
  * All rights reserved.
